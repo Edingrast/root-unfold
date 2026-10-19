@@ -21,6 +21,8 @@ void buildResponse()
         std::cerr << "Error finding MC tree!" << std::endl;
     }
 
+    TFile *DT_weights = TFile::Open("corrections.root", "READ");
+
     double JpsiPtR, JpsiPtG, JpsiMR, JpsiMG, DeltaPhiR, DeltaPhiRandomR, DeltaPhiG, DeltaPhiRandomG;
     bool hasTOF1, hasTOF2;
 
@@ -45,13 +47,15 @@ void buildResponse()
     double phiEdges[nPhiBins + 1] = {-TMath::Pi(), -3.0 * TMath::Pi() / 4.0, -TMath::Pi() / 2.0, -TMath::Pi() / 4.0, 0.0, TMath::Pi() / 4.0, TMath::Pi() / 2.0, 3.0 * TMath::Pi() / 4.0, TMath::Pi()};
 
     TH1D *hReco[nPhiBins];
+    TH1D *hWeights[nPhiBins];
+    TH1D *hRecoWeighted[nPhiBins];
     TH1D *hTruth[nPhiBins];
     RooUnfoldResponse *response[nPhiBins];
 
     for (int iPhi = 0; iPhi < nPhiBins; iPhi++) {
 
         hReco[iPhi] = new TH1D(Form("hReco_phi%d", iPhi), Form("Reco p_{T}, #phi bin %d", iPhi), nPtBins, ptEdges);
-
+        hWeights[iPhi] = (TH1D*)DT_weights->Get(Form("pT_weights%d",iPhi));
         hTruth[iPhi] = new TH1D(Form("hTruth_phi%d", iPhi), Form("Truth p_{T}, #phi bin %d", iPhi), nPtBins, ptEdges);
         response[iPhi] = new RooUnfoldResponse(hReco[iPhi], hTruth[iPhi], Form("response_%d",iPhi), Form("unfolding response_%d",iPhi));
     }
@@ -74,27 +78,36 @@ void buildResponse()
             continue;
         }
 
-        int phiBin = -1;
-
         for (int i = 0; i < nPhiBins; ++i) {
             if (DeltaPhiRandomG >= phiEdges[i] && DeltaPhiRandomG < phiEdges[i + 1]) {
-                phiBin = i;
-                break;
+                hTruth[i]->Fill(JpsiPtG);
+
+                int bin = hWeights[i]->FindBin(JpsiPtR);
+                double weight = 1.0;
+
+                if (bin >= 1 && bin <= hWeights[i]->GetNbinsX()) {
+                    weight = hWeights[i]->GetBinContent(bin);
+                }
+                response[i]->Fill(JpsiPtR, JpsiPtG, weight);
+            }
+            if(DeltaPhiRandomR >= phiEdges[i] && DeltaPhiRandomR < phiEdges[i + 1]){
+                    hReco[i]->Fill(JpsiPtR);
             }
         }
-
-        response[phiBin]->Fill(JpsiPtR, JpsiPtG);
-        hTruth[phiBin]->Fill(JpsiPtG);
-        hReco[phiBin]->Fill(JpsiPtR);
     }
 
+    for(int i = 0; i < nPhiBins; i++){
+        hRecoWeighted[i] = (TH1D*)hReco[i]->Clone(Form("hRecoWeighted_%d",i));
+        hRecoWeighted[i]->Multiply(hWeights[i]);
+    }
 
-    TFile *output = TFile::Open("response_phiPt_5.root", "RECREATE");
+    TFile *output = TFile::Open("response_new_v3.root", "RECREATE");
 
     for (int i = 0; i < nPhiBins; i++){
       response[i]->Write();
       hTruth[i]->Write();
-      hReco[i]->Write();  
+      hReco[i]->Write();
+      hRecoWeighted[i]->Write();
     }
 
     output->Close();
