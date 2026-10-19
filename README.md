@@ -1,5 +1,5 @@
 # root-unfold
-Repository for running RooUnfold in Docker. The individual scripts go through the unfolding procedure step-by-step.
+Repository for running RooUnfold in Docker. The individual scripts go through the unfolding procedure step-by-step. For Docker install check [here](https://codimd.web.cern.ch/6MP0rgOZQ56H9IeR8_MnJA).
 
 ## Dockerfile
 File to tell Docker how to build the desired image.
