@@ -9,11 +9,11 @@ Script to create a response matrix. This script is running on matched MC reco an
 This response is build on 80% of the data sample.
 For the purposes of this analysis, the response matrix and unfolding is done in DeltaPhi slices.
 
-## closureTest.cxx
+## work/bins_6/closureTest.cxx
 Script to do the closure test on the remaining 20% of the MC data. It creates a root file with reco, true and unfolded distribution (using iterative bayesian unfolding) and also covariance matrix.
 Furthermore, the resulting root file is containing plots to see whether the unfolding is successful. These plots are ratio (unfolded/true) distribution (expected to be 1 within uncertainties) and also relative ratio ((unfolded-true)/true) which is, in my opinion, enough to see whether the closure test works (expected to be 0 within uncertainties).
 
-## closureResults.cxx
+## work/bins_6/closureResults.cxx
 Script to write the result of closure test for comparison. It calculate the average statistical uncertainty in each phi slice and also average relative difference change between the number of iterations. Statistical uncertainty should grow with number of iterations and average relative difference between iterations should be decreasing. We are looking for the sweet spot is below ~1% but the statistical uncertainty is not too high.
 
 ## unfoldData.cxx
