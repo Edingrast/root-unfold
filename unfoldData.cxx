@@ -28,11 +28,15 @@ void unfoldData(){
         yieldHisto[i] = (TH1D*)asymFile[i]->Get("yieldDeltaPhiStore");
     }
 
-    //TH2D *distToUnfold = new TH2D("distToUnfold", "distribution to unfold", nPtBins, ptEdges, nPhiBins, phiEdges);
+    TFile *AccXe = TFile::Open("corrections.root", "READ");
+
+    TH1D *accxe[nPhiBins];
+    TH1D *distToUnfold_corr[nPhiBins];
 
     TH1D *distToUnfold[nPhiBins];
     for(int i = 0; i < nPhiBins; i++){
         distToUnfold[i] = new TH1D(Form("distToUnfold_%d",i), Form("distToUnfold_%d",i), nPtBins, ptEdges);
+        accxe[i] = (TH1D*)AccXe->Get(Form("asymmetry_accxe%d",i));
     }
 
     for(int i = 1; i <= nPtBins; i++){
@@ -45,7 +49,12 @@ void unfoldData(){
         }
     }
 
-    TFile *responseFile = TFile::Open("response_phiPt.root", "READ");
+    for(int i = 0; i < nPhiBins; i++){
+        distToUnfold_corr[i] = (TH1D*)distToUnfold[i]->Clone(Form("distToUnfold_corr_%d",i));
+        distToUnfold_corr[i]->Divide(accxe[i]);
+    }
+
+    TFile *responseFile = TFile::Open("response_new_v3.root", "READ");
 
     RooUnfoldResponse *response[nPhiBins];
 
@@ -53,17 +62,17 @@ void unfoldData(){
         response[i] = (RooUnfoldResponse*)responseFile->Get(Form("response_%d",i));
     }
     
-    TH1D *asym_pT[nPtBins];
+    /*TH1D *asym_pT[nPtBins];
     for(int i = 0; i < nPtBins; i++){
         asym_pT[i] = new TH1D(Form("asym_pT_%d", i), Form("asym_pT_%d", i), nPhiBins, phiEdges);
-    }
+    }*/
 
 
-    TFile output("unfolded_data.root", "RECREATE");
+    TFile output("unfolded_data_new_v3_corr_v2.root", "RECREATE");
 
     for (int iPhi = 0; iPhi < nPhiBins; ++iPhi) {
 
-        RooUnfoldBayes unfold(response[iPhi], distToUnfold[iPhi], 2);
+        RooUnfoldBayes unfold(response[iPhi], distToUnfold_corr[iPhi], 4);
 
         TH1D *hUnfolded = (TH1D*)unfold.Hunfold();
         TMatrixD hCov = unfold.Eunfold(RooUnfold::kCovariance);
@@ -85,10 +94,6 @@ void unfoldData(){
 
         hCovPt->Write(Form("hCovPt_%d", iPhi));
 
-        for(int i = 0; i < nPtBins; i++){
-            double binContent = hUnfolded->GetBinContent()
-            asym_pT[i]->SetBinContent(iPhi+1, )
-        }
 
         
 
