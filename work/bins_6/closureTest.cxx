@@ -8,10 +8,7 @@
 #include <random>
 #include <iostream>
 
-
-
-void closureTest()
-{   
+void unfoldData(){
     const int nPtBins = 6;
 
     double ptEdges[nPtBins + 1] = {0, 0.0286, 0.0424, 0.05575, 0.071, 0.0945, 0.20};
@@ -20,113 +17,70 @@ void closureTest()
 
     double phiEdges[nPhiBins + 1] = {-TMath::Pi(), -3.0 * TMath::Pi() / 4.0, -TMath::Pi() / 2.0, -TMath::Pi() / 4.0, 0.0, TMath::Pi() / 4.0, TMath::Pi() / 2.0, 3.0 * TMath::Pi() / 4.0, TMath::Pi()};
 
+    TFile *asymFile[nPtBins];
 
+    for(int i = 0; i < nPtBins; i++){
+        asymFile[i] = TFile::Open(Form("pT_2/Yield_JPsiAsymMu_%d.root",i), "READ");
+    }
 
-    TFile *responseFile = TFile::Open("response_phiPt.root", "READ");
+    TH1D *yieldHisto[nPtBins];
+    for(int i = 0; i < nPtBins; i++){
+        yieldHisto[i] = (TH1D*)asymFile[i]->Get("yieldDeltaPhiStore");
+    }
+
+    TFile *AccXe = TFile::Open("corrections.root", "READ");
+
+    TH1D *accxe[nPhiBins];
+    TH1D *distToUnfold_corr[nPhiBins];
+
+    TH1D *distToUnfold[nPhiBins];
+    for(int i = 0; i < nPhiBins; i++){
+        distToUnfold[i] = new TH1D(Form("distToUnfold_%d",i), Form("distToUnfold_%d",i), nPtBins, ptEdges);
+        accxe[i] = (TH1D*)AccXe->Get(Form("asymmetry_accxe%d",i));
+    }
+
+    for(int i = 1; i <= nPtBins; i++){
+        for(int j = 1; j <= nPhiBins; j++){
+            double binPhi = yieldHisto[i-1]->GetBinContent(j);
+            double binPhiError = yieldHisto[i-1]->GetBinError(j);
+
+            distToUnfold[j-1]->SetBinContent(i, binPhi);
+            distToUnfold[j-1]->SetBinError(i, binPhiError);
+        }
+    }
+
+    for(int i = 0; i < nPhiBins; i++){
+        distToUnfold_corr[i] = (TH1D*)distToUnfold[i]->Clone(Form("distToUnfold_corr_%d",i));
+        distToUnfold_corr[i]->Divide(accxe[i]);
+    }
+
+    TFile *responseFile = TFile::Open("response_new_v3.root", "READ");
 
     RooUnfoldResponse *response[nPhiBins];
 
     for(int i = 0; i < nPhiBins; i++){
         response[i] = (RooUnfoldResponse*)responseFile->Get(Form("response_%d",i));
     }
-
-    TFile *MC_file = TFile::Open("kCohJpsiToMu_new.root", "READ");
-    if (!MC_file || MC_file->IsZombie()) {
-        std::cerr << "Error opening file!" << std::endl;
-        return;
-    }
-
-    TTree *MC_Tree  = (TTree*) MC_file->Get("DF_2336960461639424/O2treematched");
-
-    if(!MC_Tree) {
-        std::cerr << "Error finding MC tree!" << std::endl;
-    }
-
-
-
-   
-
-    double JpsiPtR, JpsiPtG, JpsiMR, JpsiMG, DeltaPhiR, DeltaPhiRandomR, DeltaPhiG, DeltaPhiRandomG;
-    bool hasTOF1, hasTOF2;
-
-
-    MC_Tree->SetName("MC_Tree");
-    MC_Tree->SetBranchAddress("fJpsiPtG", &JpsiPtG);
-    MC_Tree->SetBranchAddress("fJpsiMG", &JpsiMG);
-    MC_Tree->SetBranchAddress("fJpsiPt", &JpsiPtR);
-    MC_Tree->SetBranchAddress("fJpsiM", &JpsiMR);
-    MC_Tree->SetBranchAddress("fHasTOF1", &hasTOF1);
-    MC_Tree->SetBranchAddress("fHasTOF2", &hasTOF2);
-    MC_Tree->SetBranchAddress("fJpsiPhiCharge", &DeltaPhiR);
-    MC_Tree->SetBranchAddress("fJpsiPhiRandom", &DeltaPhiRandomR);
-    MC_Tree->SetBranchAddress("fJpsiPhiChargeG", &DeltaPhiG);
-    MC_Tree->SetBranchAddress("fJpsiPhiRandomG", &DeltaPhiRandomG);
-
     
-
-    TH1D *hReco[nPhiBins];
-    TH1D *hTruth[nPhiBins];
-
-    for (int iPhi = 0; iPhi < nPhiBins; iPhi++) {
-
-        hReco[iPhi] = new TH1D(Form("hReco_phi%d", iPhi), Form("Reco p_{T}, #phi bin %d", iPhi), nPtBins, ptEdges);
-
-        hTruth[iPhi] = new TH1D(Form("hTruth_phi%d", iPhi), Form("Truth p_{T}, #phi bin %d", iPhi), nPtBins, ptEdges);
-    }
+    /*TH1D *asym_pT[nPtBins];
+    for(int i = 0; i < nPtBins; i++){
+        asym_pT[i] = new TH1D(Form("asym_pT_%d", i), Form("asym_pT_%d", i), nPhiBins, phiEdges);
+    }*/
 
 
-    std::mt19937 rng(12345);
-    std::uniform_real_distribution<double> uniform(0.0, 1.0);
-
-
-    Long64_t nEntries = MC_Tree->GetEntries();
-
-    for (Long64_t i = 0; i < nEntries; i++) {
-
-        MC_Tree->GetEntry(i);
-
-        double r = uniform(rng);
-
-        // Skip 80% training events
-        if (r < 0.80){
-            continue;
-        }
-
-        if(hasTOF1 == 0 && hasTOF2 == 0){
-            continue;
-        }
-
-
-        int phiBin = -1;
-
-        for (int i = 0; i < nPhiBins; ++i) {
-            if (DeltaPhiRandomG >= phiEdges[i] && DeltaPhiRandomG < phiEdges[i + 1]) {
-                phiBin = i;
-                break;
-            }
-        }
-
-
-        hTruth[phiBin]->Fill(JpsiPtG);
-        hReco[phiBin]->Fill(JpsiPtR);
-    }
-
-
-    TFile output("closure_6iter_new.root", "RECREATE");
-
-    //TMatrixD *hCov[nPhiBins];
+    TFile output("unfolded_data_new_v3_corr_v2.root", "RECREATE");
 
     for (int iPhi = 0; iPhi < nPhiBins; ++iPhi) {
 
-        RooUnfoldBayes unfold(response[iPhi], hReco[iPhi], 6);
+        RooUnfoldBayes unfold(response[iPhi], distToUnfold_corr[iPhi], 4);
 
         TH1D *hUnfolded = (TH1D*)unfold.Hunfold();
         TMatrixD hCov = unfold.Eunfold(RooUnfold::kCovariance);
 
         hUnfolded->SetName(Form("hUnfolded_phi%d", iPhi));
 
-        hReco[iPhi]->Write();
-        hTruth[iPhi]->Write();
+        distToUnfold[iPhi]->Write();
+        //hTruth[iPhi]->Write();
         hUnfolded->Write();
         hCov.Write(Form("hCov_%d", iPhi));
 
@@ -140,15 +94,9 @@ void closureTest()
 
         hCovPt->Write(Form("hCovPt_%d", iPhi));
 
-        hUnfolded->Sumw2();
-        hTruth[iPhi]->Sumw2();
 
+        
 
-        TH1D *hRatio = (TH1D*)hUnfolded->Clone(Form("hRatio_phi%d", iPhi));
-
-        hRatio->Divide(hTruth[iPhi]);
-
-        hRatio->Write();
     }
 
     output.Close();
